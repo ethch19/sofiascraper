@@ -1,0 +1,24 @@
+{
+    "type": "object",
+    "required": [],
+    "properties": {
+      "user_schema": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "fixed_schema": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }

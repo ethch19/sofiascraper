@@ -1,0 +1,57 @@
+{
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "curriculum_id": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "archived_at": {
+          "type": "string"
+        },
+        "commit_message": {
+          "type": "string"
+        },
+        "owner_name": {
+          "type": "string"
+        },
+        "academic_year": {
+          "type": "number"
+        },
+        "weekday1_offset": {
+          "type": "string"
+        },
+        "week_dates": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }

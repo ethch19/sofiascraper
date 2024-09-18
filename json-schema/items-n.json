@@ -1,0 +1,75 @@
+{
+    "type": "object",
+    "additionalProperties": {
+      "type": "object",
+      "properties": {
+        "code": {
+            "type": "string"
+        },
+        "uuid": {
+            "type": "string"
+        },
+        "owner": {
+            "type": "number"
+        },
+        "type": {
+            "type": "string"
+        },
+        "created_at": {
+            "type": "string"
+        },
+        "title": {
+            "type": "string"
+        },
+        "subtitle": {
+            "type": "string"
+        },
+        "text": {
+            "type": "string"
+        },
+        "position": {
+            "type": "string"
+        },
+        "metadata": {
+            "type": "object",
+            "required": [],
+            "properties": {
+            "AOCP": {
+                "type": "array",
+                "items": {
+                "type": "string"
+                }
+            },
+            "COMP": {
+                "type": "array",
+                "items": {
+                "type": "string"
+                }
+            },
+            "PSP_TYPE": {
+                "type": "array",
+                "items": {
+                "type": "string"
+                }
+            }
+            }
+        },
+        "user_schema": {
+            "type": "array",
+            "items": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+            }
+        },
+        "children": {
+            "type": "array",
+            "items": {
+            "type": "string"
+            }
+        }
+    },
+      "required": []
+    }
+  }

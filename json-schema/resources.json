@@ -1,0 +1,39 @@
+{
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "curriculum": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        },
+        "event_id": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string"
+        },
+        "preview": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      }
+    }
+  }

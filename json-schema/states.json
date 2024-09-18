@@ -1,0 +1,152 @@
+{
+    "type": "object",
+    "required": [],
+    "properties": {
+      "id": {
+        "type": "number"
+      },
+      "readonly": {
+        "type": "string"
+      },
+      "node_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tag_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "years_label": {
+        "type": "string"
+      },
+      "week_label_settings": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "offset": {
+            "type": "string"
+          }
+        }
+      },
+      "doc_fields": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "configured_practique": {
+        "type": "boolean"
+      },
+      "configured_celcat": {
+        "type": "boolean"
+      },
+      "integrations": {
+        "type": "object",
+        "required": [],
+        "properties": {}
+      },
+      "step_groups": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "enable_explore": {
+        "type": "boolean"
+      },
+      "available_explore": {
+        "type": "boolean"
+      },
+      "enable_calendar": {
+        "type": "boolean"
+      },
+      "available_calendar": {
+        "type": "boolean"
+      },
+      "enable_timeline": {
+        "type": "string"
+      },
+      "available_timeline": {
+        "type": "boolean"
+      },
+      "enable_review": {
+        "type": "boolean"
+      },
+      "available_review": {
+        "type": "boolean"
+      },
+      "enable_clinical": {
+        "type": "string"
+      },
+      "available_clinical": {
+        "type": "boolean"
+      },
+      "enable_question_bank": {
+        "type": "string"
+      },
+      "available_question_bank": {
+        "type": "boolean"
+      },
+      "enable_practique": {
+        "type": "string"
+      },
+      "available_practique": {
+        "type": "boolean"
+      },
+      "enable_blendt": {
+        "type": "string"
+      },
+      "available_blendt": {
+        "type": "boolean"
+      },
+      "enable_celcat": {
+        "type": "boolean"
+      },
+      "available_celcat": {
+        "type": "boolean"
+      },
+      "available_legacy_clinical_year_filter": {
+        "type": "boolean"
+      },
+      "available_legacy_events": {
+        "type": "boolean"
+      },
+      "available_experimental_export": {
+        "type": "boolean"
+      },
+      "options_experimental_export": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "available_experimental_import": {
+        "type": "boolean"
+      },
+      "options_experimental_import": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "available_experimental_import_options": {
+        "type": "boolean"
+      },
+      "available_experimental_portfolio": {
+        "type": "boolean"
+      },
+      "options_experimental_portfolio": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }

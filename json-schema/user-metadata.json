@@ -1,0 +1,147 @@
+{
+    "type": "object",
+    "required": [],
+    "properties": {
+      "id": {
+        "type": "number"
+      },
+      "username": {
+        "type": "string"
+      },
+      "first_name": {
+        "type": "string"
+      },
+      "last_name": {
+        "type": "string"
+      },
+      "is_admin": {
+        "type": "string"
+      },
+      "is_editor": {
+        "type": "string"
+      },
+      "is_gatekeeper": {
+        "type": "string"
+      },
+      "is_student": {
+        "type": "boolean"
+      },
+      "is_superuser": {
+        "type": "string"
+      },
+      "identifiers": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "code": {
+              "type": "string"
+            },
+            "curriculum": {
+              "type": "string"
+            },
+            "bundle_id": {
+              "type": "number"
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "uuid": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "year": {
+        "type": "string"
+      },
+      "curriculum_group": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "type_label": {
+            "type": "string"
+          },
+          "navigable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "curriculum": {
+        "type": "string"
+      },
+      "notes": {
+        "type": "string"
+      },
+      "achievements": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "usersites": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "bundle_id": {
+              "type": "string"
+            },
+            "user_type": {
+              "type": "string"
+            },
+            "site": {
+              "type": "object",
+              "required": [],
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "domain": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
