@@ -7,10 +7,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from browsermobproxy import Server
 from functools import reduce
 import undetected_chromedriver as uc
+from urllib.parse import urlparse
 import json
 import time
 
@@ -69,7 +70,7 @@ proxy.new_har("microsoft_login", options={'captureHeaders': True, 'captureConten
 
 # Chrome options
 chrome_options = Options()
-#chrome_options.add_argument("--headless")
+chrome_options.add_argument("--headless")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument(f"--proxy-server={proxy.proxy}")
@@ -98,20 +99,28 @@ def verify_credentials(driver, username, password):
     WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.NAME, "loginfmt"))).send_keys(username + Keys.RETURN)
     WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.NAME, "passwd"))).send_keys(password)
     time.sleep(1)
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "idSIButton9")))
-    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
-
-    # Wait for the 2-step verification number to appear
-    verification_number = WebDriverWait(driver, 5).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, ".displaySign"))
-    ).text
-    print(f"Please approve the sign-in request with the number: {verification_number}")
-    
     try:
-        auth_sign = driver.find_element(By.CSS_SELECTOR, ".displaySign")
-        return WebDriverWait(driver, 60).until(EC.staleness_of(auth_sign))
-    except NoSuchElementException:
-        return False
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "idSIButton9")))
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
+        # Wait for the 2-step verification number to appear
+        verification_number = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".displaySign"))
+        ).text
+        print(f"Please approve the sign-in request with the number: {verification_number}")
+        try:
+            auth_sign = driver.find_element(By.CSS_SELECTOR, ".displaySign")
+            return WebDriverWait(driver, 60).until(EC.staleness_of(auth_sign))
+        except NoSuchElementException:
+            return False
+    except TimeoutException:
+        print("No 2FA detected. Trying to head to sofia")
+        return True
+
+def clean_path(url):
+    parsed_url = urlparse(url)
+    path = parsed_url.path
+    cleaned_path = os.path.basename(path)
+    return cleaned_path
 
 target_url = "https://medicine.sofia.imperial.ac.uk/map/a100/"
 
@@ -138,18 +147,43 @@ save_dir = os.path.join(script_dir, dir_name)
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
+json_bool = input("Scan only .json files? (Y/N): ")
+while not(json_bool == "Y" or json_bool == "N"):
+    print("Invalid input, try again.")
+    json_bool = input("Scan only .json files? (Y/N): ")
+json_bool = True if json_bool == 'Y' else False
+
+start_saving = "user"
+
 for entry in proxy.har['log']['entries']:
     request = entry['request']
     response = entry['response']
-    if "application/json" in response['content']['mimeType']:
-        content = response['content']
-        name = response['headers'][0]['name']
-        if 'text' in content and "Content-Type" == name:
-            file_path = os.path.join(save_dir, f"{name}_response_{int(round(time.time() * 1000))}.json")
+    content = response['content']
+    name = clean_path(request['url'])
+    if json_bool:
+        if "application/json" in response['content']['mimeType']:
+            if not (start_saving == True or name == start_saving):
+                continue
+            else:
+                start_saving = True
+            print(name)
+            if 'text' in content:
+                if not len(content['text']):
+                    continue
+                file_path = os.path.join(save_dir, f"{int(round(time.time_ns()))}_{name}.json")
+                with open(file_path, "w") as f:
+                    json_obj = json.loads(content['text'])
+                    json.dump(json_obj, f, indent=4)
+    else:
+        if 'text' in content:
+            if not len(content['text']):
+                continue
+            file_name = f"{name}_response_{int(round(time.time() * 1000))}.txt"
+            print(content['mimeType'])
+            print(file_name)
+            file_path = os.path.join(save_dir, file_name)
             with open(file_path, "w") as f:
-                json_obj = json.loads(content['text'])
-                json.dump(json_obj, f, indent=4)
-
+                f.write(content['text'])
 
 print(f"Elapsed Scraping Time: {time.time() - start_time} seconds")
 
