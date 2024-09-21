@@ -5,3 +5,4 @@ browsermob*
 *.cer
 COMMON*
 sample-data
+*.svg

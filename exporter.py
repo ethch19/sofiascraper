@@ -1,11 +1,15 @@
 import os
 import json
 import pytz
+import time
 from datetime import datetime
+from anytree import Node, RenderTree
+from anytree.exporter import DotExporter
+from collections import deque
 
 json_name_dict = ["user", "curriculum-groups", "bundle-settings", "curriculum", "resources", "notes", "attachments", "learning-events", "calendar-events", "clinical"]
 
-def rename_files(names_dict, directory=".", start_with="responses_", separator="_", uuid_search="user"):
+def get_files(directory=".", start_with="responses_", separator="_", uuid_search="user"):
     path_dict = {}
     for folder in sorted(os.listdir(directory)):
         if folder.startswith(start_with):
@@ -14,7 +18,9 @@ def rename_files(names_dict, directory=".", start_with="responses_", separator="
             for file in sorted(os.listdir(folder)):
                 file_path = os.path.join(folder, file)
                 if os.path.isfile(file_path):
-                    file_name = os.path.splitext(file)[0].split(separator)[1]
+                    file_split = os.path.splitext(file)
+                    file_sep = file_split[0].split(separator)
+                    file_name = file_sep[1]
                     if file_name == uuid_search:
                         with open(file_path, "r") as f:
                             json_dict = json.load(f)
@@ -25,7 +31,14 @@ def rename_files(names_dict, directory=".", start_with="responses_", separator="
                             if "user_schema" in json_dict:
                                 folder_dict["schemas"] = file_path
                             else:
+                                if len(file_sep) > 2:
+                                    folder_dict["items-cache"] = file_path
+                                    continue
                                 folder_dict["items"] = file_path
+                                save_dir = os.path.join(folder, file_split[0]+"_cache"+file_split[1])
+                                if not os.path.isfile(save_dir):
+                                    flip_dict_keys(file_path, save_dir)
+                                    folder_dict["items-cache"] = save_dir
                             continue
                     folder_dict[file_name] = file_path
             folder_dict['uuid-curriculum'] = uuid
@@ -36,8 +49,60 @@ def epoch_to_datetime(epoch, timezone="Europe/London"):
     timezone = pytz.timezone(timezone)
     return datetime.fromtimestamp(epoch).astimezone(timezone).strftime('%Y-%m-%d %H:%M:%S %Z %z')
 
+def flip_dict_keys(file_dir, save_dir):
+    with open(file_dir, "r") as f:
+        json_data = json.load(f)
+        new_dict = {v["uuid"]: {"id": k, **v} for k, v in json_data.items()}
+    with open(save_dir, "w") as f:
+        json.dump(new_dict, f, indent=4)
+
+def create_tree(tree_dict, root):
+    root = Node(tree_dict[root]["title"], parent=None, obj=tree_dict[root])
+    queue = deque([root])
+    while queue:
+        node = queue.popleft()
+        if node.obj["children"] == None:
+            continue
+        for x in node.obj["children"]:
+            title = tree_dict[x]["title"]
+            title = (title[:20] + "..") if len(title) > 20 else title
+            child_node = Node(title, parent=node, obj=tree_dict[x])
+            queue.append(child_node)
+    return root
+
+def get_curriculum(path_dict, response_time):
+    link_dict = path_dict[response_time]
+    with open(link_dict["user"], "r") as f:
+        json_data = json.load(f)
+    steps = json_data["steps"]
+    statement = ""
+    for index, element in enumerate(steps):
+        code = element["code"]
+        curriculum = element["curriculum"]
+        statement = statement + f"{index} == {code}/{curriculum}\n"
+    select_year = input("Choose the following curriculum: (Zero-indexed) \n" + statement)
+    while int(select_year) >= len(steps) and int(select_year) < 0:
+        print("Invalid input. Try again")
+        select_year = input("Choose the following curriculum: (Zero-indexed) \n" + statement)
+    uuid = steps[int(select_year)]["uuid"]
+    with open(link_dict["items-cache"], "r") as f:
+        json_data = json.load(f)
+    try:
+        entry_id = json_data[uuid]["id"]
+    except KeyError:
+        print("Uuid item not found")
+        return
+    with open(link_dict["items"], "r") as f:
+        items_json = json.load(f)
+    root_node = create_tree(items_json, entry_id)
+    #print(RenderTree(root_node))
+    DotExporter(root_node).to_picture(f"tree_diagram_{int(time.time())}.svg")
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-paths = rename_files(json_name_dict)
-print(paths)
-print(epoch_to_datetime(float(next(iter(paths)))))
+if __name__ == "__main__":
+    paths = get_files()
+    print(paths)
+    print(epoch_to_datetime(float(next(iter(paths)))))
+
+    get_curriculum(paths, "1726788990")
