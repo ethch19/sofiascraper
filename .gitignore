@@ -6,3 +6,4 @@ browsermob*
 COMMON*
 sample-data
 *.svg
+__pycache__/
