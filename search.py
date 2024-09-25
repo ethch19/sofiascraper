@@ -1,8 +1,11 @@
 import json
 import os
 import time
+from exporter import get_responses, get_files
 
-def dfs(struct, path=None, depth=None, closure:function = None):
+COMMON_VALUES = ["code"]
+
+def dfs(struct, path=None, depth=None, closure=True):
     if path is None:
         path = []
     if depth is None:
@@ -14,49 +17,73 @@ def dfs(struct, path=None, depth=None, closure:function = None):
         for x, y in enumerate(struct):
             dfs(y, path+[x], depth)
     else:
-        if closure is None:
-            v = tuple(path)
+        if not closure:
+            v = str(path)
             if v not in depth:
                 depth[v] = set()
             depth[v].add(struct)
         else:
-            depth = closure(struct, path, depth)
+            depth = common_search_closure(struct, path, depth)
     return depth
 
 def common_search_closure(struct, path, depth):
-    v = tuple([item for item in path if not isinstance(item, int)])
+    v = [item for item in path if not isinstance(item, int)]
     if len(str(v[0])) == 40: #check for uuid
-        v = tuple(list(v)[1:]) 
+        v = list(v)[1:]
+    v = '>'.join(v)
     if v not in depth:
         depth[v] = set()
-    depth[v].add(struct)
+    depth[v].add(str(struct))
     return depth
 
-def create_common_files(data_dir, save_dir):
-    for f in os.listdir(data_dir):
-        path = os.path.join(data_dir, f)
+def create_common_files(save_dir, response, start_with="responses_"):
+    folder_path = start_with+response
+    for f in os.listdir(folder_path):
+        path = os.path.join(folder_path, f)
         filename = os.fsdecode(f)
         if filename.endswith(".json"):
             with open(path, "r") as file:
                 print(f"------ START File: {f} ------")
                 json_d = json.load(file)
-                data = dfs(json_d, closure=common_search_closure)
-                new_path = os.path.join(save_dir, f"{f[:-5]}_COMMON.txt")
+                data = dfs(json_d)
+                for k in data:
+                    if isinstance(data[k], set):
+                        data[k] = list(data[k])
+                new_path = os.path.join(save_dir, f"{filename[:-5]}.json")
                 with open(new_path, "w") as new_file:
-                    for k, v in data.items():
-                        new_file.write(f"{k}\n")
-                        for q in v:
-                            new_file.write(f"{q}\n")
-                        new_file.write("\n")
+                    json.dump(data, new_file, indent=4)
         print(f"------ END File ------")
 
-if __name__ == "__main__":
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, "sample-data") #change "sample-data" to directory
+def common_values(save_dir, response, start_with="COMMON_", separator="-"):
+    folder_path = start_with+response
+    for f in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, f)
+        with open(file_path, "r") as file:
+            json_data = json.load(file)
+        for i in COMMON_VALUES:
+            if i in json_data:
+                values = json_data[i]
+                new_values = {}
+                for p in values:
+                    if i == "code":
+                        split = p.split(separator)
+                        for k in range(len(split)):
+                            key = separator.join(split[:k+1])
+                            if key not in new_values:
+                                new_values[key] = 0
+                            new_values[key] += 1
+                new_values = {k: v for k, v in new_values.items() if v > 1}
+                new_path = os.path.join(save_dir, f"{i}_VALUES.json")
+                with open(new_path, "w") as file:
+                    json.dump(new_values, file, indent=4)
 
-    dir_name = f"COMMON_{int(round(time.time()))}"
-    save_dir = os.path.join(script_dir, dir_name)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    
-    create_common_files(data_dir, save_dir)
+if __name__ == "__main__":
+    responses = get_responses()
+    path_dict = get_files(responses)
+    for i in responses:
+        dir_name = f"COMMON_{i}"
+        save_dir = os.path.join('.', dir_name)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        create_common_files(save_dir, i)
+        common_values(save_dir, i)

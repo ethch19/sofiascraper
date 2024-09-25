@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter import filedialog
 from PIL import Image, ImageTk
 from exporter import *
+from scraper import *
 
 MIN_HEIGHT = 700
 MIN_WIDTH = 400
@@ -21,16 +22,32 @@ class CheckboxTreeview(ttk.Treeview):
         self.tag_configure("unchecked", image=self.im_unchecked)
         self.tag_configure("tristate", image=self.im_tristate)
         self.tag_configure("checked", image=self.im_checked)
+        self.tag_configure('has_children', foreground="#004FFF")
         self.bind("<Button-1>", self.box_click, True)
         self.bind("<Return>", self.check_items, False)
         self.bind("<<TreeviewSelect>>", self.on_select)
+        self.bind("<<TreeviewOpen>>", self.on_open)
         self.check_hidden = tk.BooleanVar(value=False)
         self.prop_node_id = tk.StringVar()
+        self.responses = get_responses()
+        self.time_responses = [epoch_to_datetime(float(x)) for x in self.responses]
+        self.loop = asyncio.get_event_loop()
 
     def image_config(self, file_path, width, height):
         img = Image.open(file_path)
         new_img = img.resize((width, height), Image.Resampling.LANCZOS)
         return ImageTk.PhotoImage(new_img)
+
+    def fetch_response(self, root):
+        print("Fetching response")
+        loginwindow = LoginWindow.start_login(root)
+        self.responses = get_responses()
+        self.time_responses = [epoch_to_datetime(float(x)) for x in self.responses]
+        self.update_responsebox()
+
+    def update_responsebox(self):
+        response_box['values'] = self.time_responses
+        current_response.set(self.time_responses[0])
 
     def update_tree(self, *args):
         response = args[0].get()
@@ -48,7 +65,7 @@ class CheckboxTreeview(ttk.Treeview):
             self.item(self.node.obj["uuid"], open=True)
 
     def insert_tree(self, parent, node):
-        self.insert(parent, "end", iid=node.obj["uuid"], text=node.name, values=(len(node.children)))
+        new_node = self.insert(parent, "end", iid=node.obj["uuid"], text=node.name, values=(len(node.children)))
         for c in node.children:
             self.insert_tree(node.obj["uuid"], c)
     
@@ -58,6 +75,7 @@ class CheckboxTreeview(ttk.Treeview):
         elif not ("unchecked" in kwargs["tags"] or "checked" in kwargs["tags"] or "tristate" in kwargs["tags"]):
             kwargs["tags"] = ["unchecked"]
         ttk.Treeview.insert(self, parent, index, iid, **kwargs)
+        self.update_child_tags(parent)
 
     def check_descendant(self, item):
         children = self.get_children(item)
@@ -140,6 +158,21 @@ class CheckboxTreeview(ttk.Treeview):
         if len(visible_items) == 1:
             self.prop_node_id.set(visible_items[0])
         self.after(10, lambda: self.bind("<<TreeviewSelect>>", self.on_select))
+
+    def on_open(self, event):
+        selected_item = self.focus()
+        for child in self.get_children(selected_item):
+            current_tags = self.item(child, "tags")
+            if self.get_children(child):
+                new_tags = current_tags + ("has_children",)
+                self.item(child, tags=new_tags)
+
+    def update_child_tags(self, parent):
+        for child in self.get_children(parent):
+            current_tags = self.item(child, "tags")
+            if self.get_children(child):
+                new_tags = current_tags + ("has_children",)
+                self.item(child, tags=new_tags)
 
     def is_visible(self, item):
         parent = self.parent(item)
@@ -302,7 +335,7 @@ def open_export_window():
     export_frame.rowconfigure(0, weight=1)
     export_frame.columnconfigure(1, weight=1)
 
-    export_selection = tk.StringVar()
+    export_selection = tk.StringVar(value="Selected")
     radio1 = ttk.Radiobutton(export_frame, text="All", variable=export_selection, value="All")
     radio1.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
     radio2 = ttk.Radiobutton(export_frame, text="Selected", variable=export_selection, value="Selected")
@@ -323,9 +356,6 @@ def open_export_window():
     next_button.grid(row=2, column=0, columnspan=3, pady=10, sticky="S")
 
 if __name__ == '__main__':
-    responses = get_responses()
-    time_responses = [epoch_to_datetime(float(x)) for x in responses] 
-
     root = tk.Tk()
     root.title("Sofia Scraper")
     root.geometry(f"{START_WIDTH}x{START_HEIGHT}")
@@ -333,20 +363,6 @@ if __name__ == '__main__':
     root.grid_columnconfigure(0, weight=1)
     root.grid_columnconfigure(1, weight=3)
     root.grid_rowconfigure(1, weight=1)
-
-    combobox_frame = ttk.Frame(root, padding="10 10 10 10", height=40)
-    combobox_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
-    combobox_frame.grid_propagate(False)
-    combobox_frame.columnconfigure(0, weight=1)
-    combobox_frame.columnconfigure(1, weight=1)
-
-    current_response = tk.StringVar()
-    response_box = ttk.Combobox(combobox_frame, justify="left", height="20", state="readonly", values=time_responses, textvariable=current_response)
-    response_box.grid(row=0, column=0, ipadx=5, ipady=5, sticky="NEW")
-
-    current_curriculum = tk.StringVar()
-    curriculum_box = PropagateCombobox(combobox_frame, justify="left", height="20", state="readonly", values="", textvariable=current_curriculum)
-    curriculum_box.grid(row=0, column=1, ipadx=5, ipady=5, sticky="NEW")
 
     treeview_frame = ttk.Frame(root, padding="10 10 10 10")
     treeview_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -359,6 +375,20 @@ if __name__ == '__main__':
     tree.heading("#0", text="Node")
     tree.heading("children", text="Children")
     tree.grid(row=0, column=0, sticky="NSWE")
+
+    combobox_frame = ttk.Frame(root, padding="10 10 10 10", height=40)
+    combobox_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+    combobox_frame.grid_propagate(False)
+    combobox_frame.columnconfigure(0, weight=1)
+    combobox_frame.columnconfigure(1, weight=1)
+
+    current_response = tk.StringVar()
+    response_box = ttk.Combobox(combobox_frame, justify="left", height="20", state="readonly", values=tree.time_responses, textvariable=current_response)
+    response_box.grid(row=0, column=0, ipadx=5, ipady=5, sticky="NEW")
+
+    current_curriculum = tk.StringVar()
+    curriculum_box = PropagateCombobox(combobox_frame, justify="left", height="20", state="readonly", values="", textvariable=current_curriculum)
+    curriculum_box.grid(row=0, column=1, ipadx=5, ipady=5, sticky="NEW")
 
     left_frame = ttk.Frame(root, padding="10 10 10 10")
     left_frame.grid(row=0, rowspan=2, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -380,7 +410,10 @@ if __name__ == '__main__':
     control_frame.rowconfigure(0, weight=1)
 
     check_hidden_box = ttk.Checkbutton(control_frame, text="Select hidden items", variable=tree.check_hidden)
-    check_hidden_box.grid(row=0, column=1, ipadx=5, ipady=5)
+    check_hidden_box.grid(row=0, column=0, ipadx=5, ipady=5)
+
+    response_btn = ttk.Button(control_frame, text="Get response", command=lambda: tree.fetch_response(root))
+    response_btn.grid(row=0, column=1, ipadx=5, ipady=5)
 
     export_frame = ttk.Labelframe(label_frame, text="Export to Files")
     export_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
@@ -413,8 +446,8 @@ if __name__ == '__main__':
 
     tree.prop_node_id.trace_add("write", lambda *args: properties_tree.get_properties(tree.update_properties()))
 
-    if len(time_responses) > 0:
-        current_response.set(time_responses[0])
+    if len(tree.time_responses) > 0:
+        current_response.set(tree.time_responses[0])
         if len(curriculum_box["values"]) > 0:
             current_curriculum.set(curriculum_box["values"][0])
             tree.update_tree(current_response, curriculum_box.current())

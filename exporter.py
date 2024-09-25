@@ -6,6 +6,7 @@ from anytree import Node, PreOrderIter
 from anytree.search import find
 from collections import deque
 import pandas as pd
+import asyncio
 
 json_name_dict = ["user", "curriculum-groups", "bundle-settings", "curriculum", "resources", "notes", "attachments", "learning-events", "calendar-events", "clinical"]
 
@@ -20,7 +21,10 @@ def get_files(responses: list, start_with="responses_", separator="_", uuid_sear
             if os.path.isfile(file_path):
                 file_split = os.path.splitext(file)
                 file_sep = file_split[0].split(separator)
-                file_name = file_sep[1]
+                if len(file_sep) > 1:
+                    file_name = file_sep[1]
+                else:
+                    file_name = file_sep[0]
                 if file_name == uuid_search:
                     with open(file_path, "r") as f:
                         json_dict = json.load(f)
@@ -29,18 +33,26 @@ def get_files(responses: list, start_with="responses_", separator="_", uuid_sear
                     with open(file_path, "r") as f:
                         json_dict = json.load(f)
                         if "user_schema" in json_dict:
-                            folder_dict["schemas"] = file_path
+                            new_path = os.path.join(folder_path, "schemas.json")
+                            os.rename(file_path, new_path)
+                            folder_dict["schemas"] = new_path
                         else:
                             if len(file_sep) > 2:
                                 folder_dict["items-cache"] = file_path
                                 continue
-                            folder_dict["items"] = file_path
-                            save_dir = os.path.join(folder_path, file_split[0]+"_cache"+file_split[1])
+                            new_path = os.path.join(folder_path, "items.json")
+                            os.rename(file_path, new_path)
+                            folder_dict["items"] = new_path
+                            save_dir = os.path.join(folder_path, "items-cache.json")
+                            print(save_dir)
+                            print(new_path)
                             if not os.path.isfile(save_dir):
-                                flip_dict_keys(file_path, save_dir)
+                                flip_dict_keys(new_path, save_dir)
                                 folder_dict["items-cache"] = save_dir
                         continue
-                folder_dict[file_name] = file_path
+                new_path = os.path.join(folder_path, f"{file_name}.json")
+                os.rename(file_path, new_path)
+                folder_dict[file_name] = new_path
         folder_dict['uuid-curriculum'] = uuid
         path_dict[folder] = folder_dict
     return path_dict
@@ -115,9 +127,9 @@ def get_tree(response: list, select_year: int):
     root_node = create_tree(items_json, entry_id)
     return root_node
 
-def extract_paths(node, code_filter):
+def extract_paths(node):
     paths = []
-    for leaf in PreOrderIter(node, filter_=lambda n: n.is_leaf and n.obj and n.obj["code"].startswith(code_filter)):
+    for leaf in PreOrderIter(node, filter_=lambda n: n.is_leaf):
         path = []
         current = leaf
         while current:
@@ -129,16 +141,16 @@ def extract_paths(node, code_filter):
 def level_flattening(paths):
     data_dict = {}
     for path in paths:
-        level1_topic = path[1].topic if len(path) > 1 else None
-        if level1_topic not in data_dict:
-            data_dict[level1_topic] = []
+        top_level = path[1] if len(path) > 1 else None
+        if top_level not in data_dict:
+            data_dict[top_level] = []
         entry = {
             'Groupings/Tags': ' > '.join([n.topic for n in path[2:-1]]),  # Combine intermediate levels starting from level 2
             'Content': path[-1].text,
             'Module': path[-1].module,
             'Code': path[-1].code
         }
-        data_dict[level1_topic].append(entry)
+        data_dict[top_level].append(entry)
     return data_dict
 
 def excel_exporter(file_path, data_dict, root_node):
@@ -151,11 +163,3 @@ def excel_exporter(file_path, data_dict, root_node):
             worksheet.write(startrow - 1, 0, level1_topic)  # Write the title for each table
     print(f"Excel file '{file_path}' created successfully.")
 
-
-if __name__ == "__main__":
-    responses = get_responses()
-    paths = get_files(responses)
-    print(paths)
-    print(epoch_to_datetime(float(next(iter(paths)))))
-
-    get_curriculum(paths, "1726788990")
