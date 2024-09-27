@@ -40,12 +40,11 @@ class CheckboxTreeview(ttk.Treeview):
 
     def fetch_response(self, root):
         print("Fetching response")
-        loginwindow = LoginWindow.start_login(root)
+        LoginWindow.start_login(root, self.response_callback)
+    
+    def response_callback(self):
         self.responses = get_responses()
         self.time_responses = [epoch_to_datetime(float(x)) for x in self.responses]
-        self.update_responsebox()
-
-    def update_responsebox(self):
         response_box['values'] = self.time_responses
         current_response.set(self.time_responses[0])
 
@@ -233,7 +232,7 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 class ExpandableTable(ttk.Frame):
-    def __init__(self, master=None, **kwargs):
+    def __init__(self, options, master=None, **kwargs):
         ttk.Frame.__init__(self, master, **kwargs)
         self.rows = 0
         self.row_widgets = {}
@@ -241,6 +240,8 @@ class ExpandableTable(ttk.Frame):
         self.rowconfigure(0, weight=1)
 
         self.create_table()
+        for i in options:
+            self.add_row(i)
 
     def create_table(self):
         ttk.Label(self, text="Property", width=15).grid(row=0, column=0, padx=10, pady=5)
@@ -248,9 +249,8 @@ class ExpandableTable(ttk.Frame):
         ttk.Label(self, text="Value", width=15).grid(row=0, column=2, padx=10, pady=5)
         self.add_row()
 
-    def add_row(self):
+    def add_row(self, options):
         self.rows += 1
-        options = ["Option 1", "Option 2", "Option 3"]
         
         combobox1 = ttk.Combobox(self, justify="left", height="20", state="readonly", values=options, width=15)
         combobox1.grid(row=self.rows, column=0, padx=10, pady=5)
@@ -410,10 +410,10 @@ if __name__ == '__main__':
     control_frame.rowconfigure(0, weight=1)
 
     check_hidden_box = ttk.Checkbutton(control_frame, text="Select hidden items", variable=tree.check_hidden)
-    check_hidden_box.grid(row=0, column=0, ipadx=5, ipady=5)
+    check_hidden_box.grid(row=0, column=0, ipadx=5, ipady=5, pady=5)
 
     response_btn = ttk.Button(control_frame, text="Get response", command=lambda: tree.fetch_response(root))
-    response_btn.grid(row=0, column=1, ipadx=5, ipady=5)
+    response_btn.grid(row=0, column=1, ipadx=5, ipady=5, pady=5)
 
     export_frame = ttk.Labelframe(label_frame, text="Export to Files")
     export_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
