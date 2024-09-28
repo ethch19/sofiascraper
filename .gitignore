@@ -2,7 +2,6 @@ venv/
 responses*
 browsermob*
 *.log
-*.cer
 COMMON*
 sample-data
 *.svg
