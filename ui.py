@@ -4,6 +4,9 @@ from tkinter import filedialog
 from PIL import Image, ImageTk
 from exporter import *
 from scraper import *
+from anytree import Node, find_by_attr, RenderTree
+import re
+import asyncio
 
 MIN_HEIGHT = 700
 MIN_WIDTH = 400
@@ -11,7 +14,6 @@ START_HEIGHT = 1000
 START_WIDTH = 800
 EXPORT_WINDOW_HEIGHT = 500
 EXPORT_WINDOW_WIDTH = 600
-CONVERT_TYPES = ["csv", "xlsx"]
 
 class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
@@ -33,20 +35,59 @@ class CheckboxTreeview(ttk.Treeview):
         self.time_responses = [epoch_to_datetime(float(x)) for x in self.responses]
         self.loop = asyncio.get_event_loop()
 
+    def get_checked(self):
+        checked_nodes = self.tag_has("checked")
+        tristate_nodes = self.tag_has("tristate")
+        if not checked_nodes:
+            return None
+        nodes = {}
+        print(checked_nodes)
+        print(tristate_nodes)
+
+        def add_node(node):
+            if node.name not in nodes:
+                nodes[node.name] = Node(name=node.name, obj=node.obj)
+            parent = node.parent
+            if parent:
+                if parent.name in checked_nodes or parent.name in tristate_nodes:
+                    if parent.name not in nodes:
+                        if parent.is_root:
+                            nodes[parent.name] = Node(name=parent.name, obj=parent.obj)
+                        else:
+                            add_node(parent)
+                    nodes[node.name].parent = nodes[parent.name]
+
+        for item in checked_nodes:
+            node = find_by_attr(self.node, item)
+            if node:
+                add_node(node)
+
+        for node in nodes.values():
+            node.children = tuple(child for child in node.children if child.name in checked_nodes or child.name in tristate_nodes)
+
+        root_nodes = [node for node in nodes.values() if node.is_root]
+        if not root_nodes:
+            return None
+        root_node = root_nodes[0]
+        title = root_node.obj["title"]
+        print(f"Rootnode title: {title}")
+        for pre, fill, node in RenderTree(root_node):
+            print("%s%s" % (pre, node.name))
+        print(nodes.keys())
+        return root_node
+
     def image_config(self, file_path, width, height):
         img = Image.open(file_path)
         new_img = img.resize((width, height), Image.Resampling.LANCZOS)
         return ImageTk.PhotoImage(new_img)
 
-    def fetch_response(self, root):
+    def fetch_response(self, root, mainwindow_callback):
         print("Fetching response")
-        LoginWindow.start_login(root, self.response_callback)
+        LoginWindow.start_login(root, self.response_callback, mainwindow_callback)
     
     def response_callback(self):
         self.responses = get_responses()
         self.time_responses = [epoch_to_datetime(float(x)) for x in self.responses]
-        response_box['values'] = self.time_responses
-        current_response.set(self.time_responses[0])
 
     def update_tree(self, *args):
         response = args[0].get()
@@ -61,12 +102,12 @@ class CheckboxTreeview(ttk.Treeview):
             if len(self.get_children()) > 0:
                 self.delete(*self.get_children())
             self.insert_tree("", self.node)
-            self.item(self.node.obj["uuid"], open=True)
+            self.item(self.node.name, open=True)
 
     def insert_tree(self, parent, node):
-        new_node = self.insert(parent, "end", iid=node.obj["uuid"], text=node.name, values=(len(node.children)))
+        new_node = self.insert(parent, "end", iid=node.name, text=node.obj["title"], values=(len(node.children)))
         for c in node.children:
-            self.insert_tree(node.obj["uuid"], c)
+            self.insert_tree(node.name, c)
     
     def insert(self, parent, index, iid=None, **kwargs):
         if not "tags" in kwargs:
@@ -232,7 +273,7 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 class ExpandableTable(ttk.Frame):
-    def __init__(self, options, master=None, **kwargs):
+    def __init__(self, master=None, **kwargs):
         ttk.Frame.__init__(self, master, **kwargs)
         self.rows = 0
         self.row_widgets = {}
@@ -240,8 +281,6 @@ class ExpandableTable(ttk.Frame):
         self.rowconfigure(0, weight=1)
 
         self.create_table()
-        for i in options:
-            self.add_row(i)
 
     def create_table(self):
         ttk.Label(self, text="Property", width=15).grid(row=0, column=0, padx=10, pady=5)
@@ -249,9 +288,10 @@ class ExpandableTable(ttk.Frame):
         ttk.Label(self, text="Value", width=15).grid(row=0, column=2, padx=10, pady=5)
         self.add_row()
 
-    def add_row(self, options):
+    def add_row(self):
         self.rows += 1
-        
+        options = ["option1", "option2", "option3"]
+
         combobox1 = ttk.Combobox(self, justify="left", height="20", state="readonly", values=options, width=15)
         combobox1.grid(row=self.rows, column=0, padx=10, pady=5)
         
@@ -279,177 +319,207 @@ class ExpandableTable(ttk.Frame):
 
         del self.row_widgets[row]
 
-def pick_folder(folder_entry):
-    folder_selected = filedialog.askdirectory()
-    if folder_selected:
-        folder_entry.configure(state = tk.NORMAL)
-        if folder_entry.get():
-            folder_entry.delete(0, tk.END)
-        folder_entry.insert(0, folder_selected)
-        folder_entry.configure(state = tk.DISABLED)
+class ExportWindow(tk.Toplevel):
+    def __init__(self, tree, file_type, master=None, *args, **kwargs):
+        tk.Toplevel.__init__(self, master=master, *args, **kwargs)
+        self.tree = tree
+        self.file_type = file_type
 
-def open_export_window():
-    export_window = tk.Toplevel()
-    export_window.title("Export Options")
-    export_window.geometry(f"{EXPORT_WINDOW_WIDTH}x{EXPORT_WINDOW_HEIGHT}")
-    export_window.minsize(width=EXPORT_WINDOW_WIDTH, height=EXPORT_WINDOW_HEIGHT)
-    export_window.attributes('-topmost', True)
-    export_window.grab_set()
-    export_window.grid_columnconfigure(2, weight=1)
-    export_window.grid_rowconfigure(2, weight=1)
+        self.title("Export Options")
+        self.geometry(f"{EXPORT_WINDOW_WIDTH}x{EXPORT_WINDOW_HEIGHT}")
+        self.minsize(width=EXPORT_WINDOW_WIDTH, height=EXPORT_WINDOW_HEIGHT)
+        self.attributes('-topmost', True)
+        self.grab_set()
+        self.grid_columnconfigure(2, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+        self.create_widgets()
 
-    groupby_frame = ttk.Labelframe(export_window, text="Group By", padding="10 10 10 10")
-    groupby_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
-    groupby_frame.rowconfigure(0, weight=1)
-    groupby_frame.columnconfigure(0, weight=1)
+    def create_widgets(self):
+        sortby_frame = ttk.Labelframe(self, text="Sort By", padding="10 10 10 10")
+        sortby_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
+        sortby_frame.rowconfigure(0, weight=1)
+        sortby_frame.columnconfigure(0, weight=1)
 
-    scrollable_frame_1 = ScrollableFrame(groupby_frame)
-    scrollable_frame_1.grid(row=0, column=0, ipadx=5, ipady=5, sticky="NEW")
+        self.sortby = tk.StringVar(value="Alphabetical (A-Z)")
+        sortby_box = ttk.Combobox(sortby_frame, justify="left", height="20", state="readonly", textvariable=self.sortby, values=SORTBY_OPTIONS, width=15)
+        sortby_box.grid(row=0, column=0, padx=5, pady=5)
 
-    groupby_table = ExpandableTable(scrollable_frame_1.frame)
-    groupby_table.pack(fill=tk.BOTH, expand=True)
+        flatten_frame = ttk.Labelframe(self, text="Flattening Algorithm", padding="10 10 10 10")
+        flatten_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
+        flatten_frame.rowconfigure(0, weight=1)
+        flatten_frame.columnconfigure(0, weight=1)
 
-    add_row_button = ttk.Button(groupby_frame, text="Add Row", command=groupby_table.add_row)
-    add_row_button.grid(row=1, column=0, pady=10, sticky="N")
+        self.flatten = tk.StringVar(value="Intermediate-level")
+        flatten_box = ttk.Combobox(flatten_frame, justify="left", height="20", state="readonly", textvariable=self.flatten, values=FLATTEN_OPTIONS, width=15)
+        flatten_box.grid(row=0, column=0, padx=5, pady=5)
 
-    sortby_frame = ttk.Labelframe(export_window, text="Sort By", padding="10 10 10 10")
-    sortby_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
-    sortby_frame.rowconfigure(0, weight=1)
-    sortby_frame.columnconfigure(0, weight=1)
+        export_frame = ttk.Labelframe(self, text="Export All/Selected", padding="10 10 10 10")
+        export_frame.grid(row=0, column=2, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
+        export_frame.rowconfigure(0, weight=1)
+        export_frame.columnconfigure(1, weight=1)
 
-    options = ["Alphabetical", "Created at", "Ascending", "Descending"]
-    sortby_box = ttk.Combobox(sortby_frame, justify="left", height="20", state="readonly", values=options, width=15)
-    sortby_box.grid(row=0, column=0, padx=5, pady=5)
+        self.export_selection = tk.StringVar(value="All")
+        radio1 = ttk.Radiobutton(export_frame, text="All", variable=self.export_selection, value="All")
+        radio1.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
+        radio2 = ttk.Radiobutton(export_frame, text="Selected", variable=self.export_selection, value="Selected")
+        radio2.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
 
-    flatten_frame = ttk.Labelframe(export_window, text="Flattening Algorithm", padding="10 10 10 10")
-    flatten_frame.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
-    flatten_frame.rowconfigure(0, weight=1)
-    flatten_frame.columnconfigure(0, weight=1)
+        lo_frame = ttk.Labelframe(self, text="Learning Objectives", padding="10 10 10 10")
+        lo_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
+        lo_frame.rowconfigure(0, weight=1)
+        lo_frame.columnconfigure(0, weight=1)
 
-    options = ["Intermediate-level", "Top-level"]
-    flatten_box = ttk.Combobox(flatten_frame, justify="left", height="20", state="readonly", values=options, width=15)
-    flatten_box.grid(row=0, column=0, padx=5, pady=5)
+        self.lo = tk.BooleanVar(value=True)
+        self.lo_btn = ttk.Checkbutton(lo_frame, text="Include LO's", variable=self.lo)
+        self.lo_btn.grid(row=0, column=0, sticky="NWSE", padx=10, pady=10)
 
-    export_frame = ttk.Labelframe(export_window, text="Export All/Selected", padding="10 10 10 10")
-    export_frame.grid(row=1, column=2, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
-    export_frame.rowconfigure(0, weight=1)
-    export_frame.columnconfigure(1, weight=1)
+        path_frame = ttk.Labelframe(self, text="Save Folder Location", padding="10 10 10 10")
+        path_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
+        path_frame.rowconfigure(0, weight=1)
+        path_frame.columnconfigure(1, weight=1)
 
-    export_selection = tk.StringVar(value="Selected")
-    radio1 = ttk.Radiobutton(export_frame, text="All", variable=export_selection, value="All")
-    radio1.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-    radio2 = ttk.Radiobutton(export_frame, text="Selected", variable=export_selection, value="Selected")
-    radio2.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
+        script_directory = os.path.dirname(os.path.abspath(__file__))
+        self.folder_path = tk.StringVar(value=script_directory) #os.path.expanduser("~")
+        self.folder_entry = ttk.Entry(path_frame, state=tk.DISABLED, textvariable=self.folder_path)
+        self.folder_entry.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
 
-    path_frame = ttk.Labelframe(export_window, text="Save Folder Location", padding="10 10 10 10")
-    path_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N), padx=10, pady=10)
-    path_frame.rowconfigure(0, weight=1)
-    path_frame.columnconfigure(1, weight=1)
+        open_button = ttk.Button(path_frame, text="Open Folder", command=self.pick_folder)
+        open_button.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
 
-    folder_entry = ttk.Entry(path_frame, state=tk.DISABLED)
-    folder_entry.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-
-    open_button = ttk.Button(path_frame, text="Open Folder", command=lambda: pick_folder(folder_entry))
-    open_button.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-
-    next_button = ttk.Button(export_window, text="Next")
-    next_button.grid(row=2, column=0, columnspan=3, pady=10, sticky="S")
-
-if __name__ == '__main__':
-    root = tk.Tk()
-    root.title("Sofia Scraper")
-    root.geometry(f"{START_WIDTH}x{START_HEIGHT}")
-    root.minsize(width=MIN_WIDTH, height=MIN_HEIGHT)
-    root.grid_columnconfigure(0, weight=1)
-    root.grid_columnconfigure(1, weight=3)
-    root.grid_rowconfigure(1, weight=1)
-
-    treeview_frame = ttk.Frame(root, padding="10 10 10 10")
-    treeview_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-    treeview_frame.columnconfigure(0, weight=1)
-    treeview_frame.rowconfigure(0, weight=1)
-
-    tree = CheckboxTreeview(treeview_frame, show="tree headings", selectmode="extended", columns=("children"))
-    tree.column("#0", stretch=True)
-    tree.column("children", width=100, stretch=False)
-    tree.heading("#0", text="Node")
-    tree.heading("children", text="Children")
-    tree.grid(row=0, column=0, sticky="NSWE")
-
-    combobox_frame = ttk.Frame(root, padding="10 10 10 10", height=40)
-    combobox_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
-    combobox_frame.grid_propagate(False)
-    combobox_frame.columnconfigure(0, weight=1)
-    combobox_frame.columnconfigure(1, weight=1)
-
-    current_response = tk.StringVar()
-    response_box = ttk.Combobox(combobox_frame, justify="left", height="20", state="readonly", values=tree.time_responses, textvariable=current_response)
-    response_box.grid(row=0, column=0, ipadx=5, ipady=5, sticky="NEW")
-
-    current_curriculum = tk.StringVar()
-    curriculum_box = PropagateCombobox(combobox_frame, justify="left", height="20", state="readonly", values="", textvariable=current_curriculum)
-    curriculum_box.grid(row=0, column=1, ipadx=5, ipady=5, sticky="NEW")
-
-    left_frame = ttk.Frame(root, padding="10 10 10 10")
-    left_frame.grid(row=0, rowspan=2, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
-    left_frame.rowconfigure(0, weight=1)
-    left_frame.rowconfigure(1, weight=5)
-    left_frame.columnconfigure(0, weight=1)
+        next_button = ttk.Button(self, text="Next", command=self.export)
+        next_button.grid(row=2, column=0, columnspan=3, pady=10, sticky="S")
     
-    label_frame = ttk.Frame(left_frame)
-    label_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N))
-    label_frame.rowconfigure(0, weight=1)
-    label_frame.rowconfigure(1, weight=1)
-    label_frame.columnconfigure(0, weight=1)
+    def export(self):
+        if self.export_selection.get() == "Selected":
+            checked_root_node = self.tree.get_checked()
+        else:
+            checked_root_node = self.tree.node
+        paths, spreadsheet_name = extract_paths(checked_root_node, self.lo.get())
+        flattened_dict = level_flattening(paths, self.flatten.get())
+        spreadsheet_name = re.sub(r'[<>:"/\\|?*\x00-\x1F\s]+', '_', spreadsheet_name)
+        spreadsheet_name = spreadsheet_name + f"_{int(time.time())}"
+        file_path = os.path.join(self.folder_entry.get(), spreadsheet_name)
+        sofia_exporter(file_path, flattened_dict, self.sortby.get(), self.file_type)
 
-    control_frame = ttk.Labelframe(label_frame, text="Control Panel")
-    control_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
-    control_frame.columnconfigure(0, weight=1)
-    control_frame.columnconfigure(1, weight=1)
-    control_frame.columnconfigure(2, weight=1)
-    control_frame.rowconfigure(0, weight=1)
+    def pick_folder(self):
+        folder_selected = filedialog.askdirectory(initialdir=self.folder_path.get())
+        if folder_selected:
+            self.folder_entry.configure(state = tk.NORMAL)
+            if self.folder_entry.get():
+                self.folder_entry.delete(0, tk.END)
+            self.folder_entry.insert(0, folder_selected)
+            self.folder_entry.configure(state = tk.DISABLED)
 
-    check_hidden_box = ttk.Checkbutton(control_frame, text="Select hidden items", variable=tree.check_hidden)
-    check_hidden_box.grid(row=0, column=0, ipadx=5, ipady=5, pady=5)
+class MainWindow:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sofia Scraper")
+        self.root.geometry(f"{START_WIDTH}x{START_HEIGHT}")
+        self.root.minsize(width=MIN_WIDTH, height=MIN_HEIGHT)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=3)
+        self.root.grid_rowconfigure(1, weight=1)
 
-    response_btn = ttk.Button(control_frame, text="Get response", command=lambda: tree.fetch_response(root))
-    response_btn.grid(row=0, column=1, ipadx=5, ipady=5, pady=5)
+        self.create_widgets()
 
-    export_frame = ttk.Labelframe(label_frame, text="Export to Files")
-    export_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
-    export_frame.columnconfigure(0, weight=1)
-    export_frame.columnconfigure(1, weight=1)
-    export_frame.columnconfigure(2, weight=1)
-    export_frame.rowconfigure(0, weight=1)
+        self.root.mainloop()
 
-    current_convert_type = tk.StringVar(value="csv")
-    export_btn = ttk.Button(export_frame, text="Export", padding="5 5 5 5", name="export", command=open_export_window)
-    export_btn.grid(row=0, column=0, columnspan=2, ipadx=5, ipady=5, padx=5, pady=5)
-    convert_type_box = ttk.Combobox(export_frame, justify="left", height="20", state="readonly", values=CONVERT_TYPES, textvariable=current_convert_type)
-    convert_type_box.grid(row=0, column=2, ipadx=5, ipady=5, padx=5, pady=5)
+    def create_widgets(self):
+        self.treeview_frame = ttk.Frame(self.root, padding="10 10 10 10")
+        self.treeview_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.treeview_frame.columnconfigure(0, weight=1)
+        self.treeview_frame.rowconfigure(0, weight=1)
 
-    current_response.trace_add("write", lambda *args: curriculum_box.update_list(current_response))
-    current_response.trace_add("write", lambda *args : tree.update_tree(current_response, curriculum_box.current()))
-    current_curriculum.trace_add("write", lambda *args : tree.update_tree(current_response, curriculum_box.current()))    
+        self.tree = CheckboxTreeview(self.treeview_frame, show="tree headings", selectmode="extended", columns=("children"))
+        self.tree.column("#0", stretch=True)
+        self.tree.column("children", width=100, stretch=False)
+        self.tree.heading("#0", text="Node")
+        self.tree.heading("children", text="Children")
+        self.tree.grid(row=0, column=0, sticky="NSWE")
 
-    properties_frame = ttk.Frame(left_frame)
-    properties_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-    properties_frame.columnconfigure(0, weight=1)
-    properties_frame.rowconfigure(0, weight=1)
+        self.combobox_frame = ttk.Frame(self.root, padding="10 10 10 10", height=40)
+        self.combobox_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        self.combobox_frame.grid_propagate(False)
+        self.combobox_frame.columnconfigure(0, weight=1)
+        self.combobox_frame.columnconfigure(1, weight=1)
 
-    properties_tree = PropertyTreeview(properties_frame, show="tree headings", selectmode="browse", columns=("value"))
-    properties_tree.column("#0", width=100, stretch=False)
-    properties_tree.column("value", stretch=True)
-    properties_tree.heading("#0", text="Property")
-    properties_tree.heading("value", text="Value")
-    properties_tree.grid(row=0, column=0, sticky="NSWE")
+        self.current_response = tk.StringVar()
+        self.response_box = ttk.Combobox(self.combobox_frame, justify="left", height="20", state="readonly", values=self.tree.time_responses, textvariable=self.current_response)
+        self.response_box.grid(row=0, column=0, ipadx=5, ipady=5, sticky="NEW")
 
-    tree.prop_node_id.trace_add("write", lambda *args: properties_tree.get_properties(tree.update_properties()))
+        self.current_curriculum = tk.StringVar()
+        self.curriculum_box = PropagateCombobox(self.combobox_frame, justify="left", height="20", state="readonly", values="", textvariable=self.current_curriculum)
+        self.curriculum_box.grid(row=0, column=1, ipadx=5, ipady=5, sticky="NEW")
 
-    if len(tree.time_responses) > 0:
-        current_response.set(tree.time_responses[0])
-        if len(curriculum_box["values"]) > 0:
-            current_curriculum.set(curriculum_box["values"][0])
-            tree.update_tree(current_response, curriculum_box.current())
+        self.left_frame = ttk.Frame(self.root, padding="10 10 10 10")
+        self.left_frame.grid(row=0, rowspan=2, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.left_frame.rowconfigure(0, weight=1)
+        self.left_frame.rowconfigure(1, weight=5)
+        self.left_frame.columnconfigure(0, weight=1)
+        
+        self.label_frame = ttk.Frame(self.left_frame)
+        self.label_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N))
+        self.label_frame.rowconfigure(0, weight=1)
+        self.label_frame.rowconfigure(1, weight=1)
+        self.label_frame.columnconfigure(0, weight=1)
 
-    root.mainloop()
+        self.control_frame = ttk.Labelframe(self.label_frame, text="Control Panel")
+        self.control_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
+        self.control_frame.columnconfigure(0, weight=1)
+        self.control_frame.columnconfigure(1, weight=1)
+        self.control_frame.columnconfigure(2, weight=1)
+        self.control_frame.rowconfigure(0, weight=1)
+
+        self.check_hidden_box = ttk.Checkbutton(self.control_frame, text="Select hidden items", variable=self.tree.check_hidden)
+        self.check_hidden_box.grid(row=0, column=0, ipadx=5, ipady=5, pady=5)
+
+        self.response_btn = ttk.Button(self.control_frame, text="Get response", command=lambda: self.tree.fetch_response(self.root, self.response_callback))
+        self.response_btn.grid(row=0, column=1, ipadx=5, ipady=5, pady=5)
+
+        self.export_frame = ttk.Labelframe(self.label_frame, text="Export to Files")
+        self.export_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N), pady=5)
+        self.export_frame.columnconfigure(0, weight=1)
+        self.export_frame.columnconfigure(1, weight=1)
+        self.export_frame.columnconfigure(2, weight=1)
+        self.export_frame.rowconfigure(0, weight=1)
+
+        self.current_convert_type = tk.StringVar(value="xlsx")
+        self.export_btn = ttk.Button(self.export_frame, text="Export", padding="5 5 5 5", name="export", command=self.open_export_window)
+        self.export_btn.grid(row=0, column=0, columnspan=2, ipadx=5, ipady=5, padx=5, pady=5)
+        self.convert_type_box = ttk.Combobox(self.export_frame, justify="left", height="20", state="readonly", values=FILE_TYPES, textvariable=self.current_convert_type)
+        self.convert_type_box.grid(row=0, column=2, ipadx=5, ipady=5, padx=5, pady=5)
+
+        self.current_response.trace_add("write", lambda *args: self.curriculum_box.update_list(self.current_response))
+        self.current_response.trace_add("write", lambda *args : self.tree.update_tree(self.current_response, self.curriculum_box.current()))
+        self.current_curriculum.trace_add("write", lambda *args : self.tree.update_tree(self.current_response, self.curriculum_box.current()))    
+
+        self.properties_frame = ttk.Frame(self.left_frame)
+        self.properties_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        self.properties_frame.columnconfigure(0, weight=1)
+        self.properties_frame.rowconfigure(0, weight=1)
+
+        self.properties_tree = PropertyTreeview(self.properties_frame, show="tree headings", selectmode="browse", columns=("value"))
+        self.properties_tree.column("#0", width=100, stretch=False)
+        self.properties_tree.column("value", stretch=True)
+        self.properties_tree.heading("#0", text="Property")
+        self.properties_tree.heading("value", text="Value")
+        self.properties_tree.grid(row=0, column=0, sticky="NSWE")
+
+        self.tree.prop_node_id.trace_add("write", lambda *args: self.properties_tree.get_properties(self.tree.update_properties()))
+
+        if len(self.tree.time_responses) > 0:
+            self.current_response.set(self.tree.time_responses[0])
+            if len(self.curriculum_box["values"]) > 0:
+                self.current_curriculum.set(self.curriculum_box["values"][0])
+                self.tree.update_tree(self.current_response, self.curriculum_box.current())
+
+    def open_export_window(self):
+        self.export_window = ExportWindow(master=self.root, tree=self.tree, file_type=self.current_convert_type.get())
+
+    def response_callback(self):
+        self.response_box['values'] = self.tree.time_responses
+        self.current_response.set(self.tree.time_responses[0])
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MainWindow(root)

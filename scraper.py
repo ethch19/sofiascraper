@@ -110,8 +110,11 @@ def verify_credentials(driver, message, username, password):
                 attempts += 1
         # Wait for the 2-step verification number to appear
         verification_number = WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".displaySign"))
-        ).text
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".displaySign"))).text
+        while verification_number == "" or verification_number is None:
+            time.sleep(0.1)
+            verification_number = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".displaySign"))).text
         number_text = f"2FA number: {verification_number}"
         message.config(text=number_text, fg="#4d6b0c")
         try:
@@ -144,7 +147,6 @@ def monitor_traffic(driver, proxy):
     save_dir = os.path.join(SCRIPT_DIR, dir_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-
     json_bool = True
     start_saving = "user"
     start_time = time.time()
@@ -197,10 +199,11 @@ class LoginWindow(tk.Toplevel):
         self.grab_set()
 
     @classmethod
-    def start_login(cls, root, callback):
+    def start_login(cls, root, callback, mainwindow_callback):
         self = cls(root)
 
         self.callback = callback
+        self.mainwindow_callback = mainwindow_callback
         self.btn_clicked = tk.IntVar()
         self.create_widgets()
         self.await_login()
@@ -296,12 +299,14 @@ class LoginWindow(tk.Toplevel):
                 print(exc)
                 print(future.exception())
                 self.callback()
+                self.mainwindow_callback()
 
     def force_end(self):
         try:
             self.destroy()
             self.update()
             self.callback()
+            self.mainwindow_callback()
             self.web["server"].stop()
             self.web["driver"].quit()
             self.executor.shutdown(wait=False)
@@ -324,4 +329,5 @@ class LoginWindow(tk.Toplevel):
         self.destroy()
         self.update()
         self.callback()
+        self.mainwindow_callback()
         print("Login Window destroyed")
