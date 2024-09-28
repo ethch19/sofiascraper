@@ -15,12 +15,17 @@ START_WIDTH = 800
 EXPORT_WINDOW_HEIGHT = 500
 EXPORT_WINDOW_WIDTH = 600
 
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(".")
+
 class CheckboxTreeview(ttk.Treeview):
     def __init__(self, master=None, **kwargs):
         ttk.Treeview.__init__(self, master, **kwargs)
-        self.im_checked = self.image_config("checked.png", 20, 20)
-        self.im_unchecked = self.image_config("unchecked.png", 20, 20)
-        self.im_tristate = self.image_config("tristate.png", 20, 20)
+        self.im_checked = self.image_config(os.path.join(base_path, "img", "checked.png"), 20, 20)
+        self.im_unchecked = self.image_config(os.path.join(base_path, "img", "unchecked.png"), 20, 20)
+        self.im_tristate = self.image_config(os.path.join(base_path, "img", "tristate.png"), 20, 20)
         self.tag_configure("unchecked", image=self.im_unchecked)
         self.tag_configure("tristate", image=self.im_tristate)
         self.tag_configure("checked", image=self.im_checked)
@@ -301,7 +306,7 @@ class ExpandableTable(ttk.Frame):
         combobox3 = ttk.Combobox(self, justify="left", height="20", state="readonly", values=options, width=15)
         combobox3.grid(row=self.rows, column=2, padx=10, pady=5)
 
-        btn_img = ExpandableTable.image_config("cross.png", 20, 20)
+        btn_img = ExpandableTable.image_config(os.path.join(base_path, "img", "cross.png"), 20, 20)
         delete_btn = ttk.Button(self, image=btn_img, command=lambda r=self.rows: self.delete_row(r), width=5)
         delete_btn.image = btn_img
         delete_btn.grid(row=self.rows, column=3, padx=5, pady=5)
@@ -378,8 +383,7 @@ class ExportWindow(tk.Toplevel):
         path_frame.rowconfigure(0, weight=1)
         path_frame.columnconfigure(1, weight=1)
 
-        script_directory = os.path.dirname(os.path.abspath(__file__))
-        self.folder_path = tk.StringVar(value=script_directory) #os.path.expanduser("~")
+        self.folder_path = tk.StringVar(value=base_path) #os.path.expanduser("~")
         self.folder_entry = ttk.Entry(path_frame, state=tk.DISABLED, textvariable=self.folder_path)
         self.folder_entry.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
 

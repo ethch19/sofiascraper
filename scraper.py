@@ -1,9 +1,7 @@
 import os
 import tempfile
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -17,13 +15,16 @@ import time
 import exporter
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter import messagebox
-import threading
 from concurrent import futures
+import sys
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TARGET_URL = "https://medicine.sofia.imperial.ac.uk/map/a100/"
 SIGNIN_URL = "https://login.microsoftonline.com/"
+
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(".")
 
 class ChromeWithPrefs(uc.Chrome):
     def __init__(self, *args, options=None, **kwargs):
@@ -69,12 +70,12 @@ class ChromeWithPrefs(uc.Chrome):
 
 def startup():
     print("Startup triggered")
-    server = Server(r"browsermob-proxy-2.1.4\bin\browsermob-proxy")
+    server = Server(os.path.join(base_path, "browsermob-proxy-2.1.4/bin/browsermob-proxy"))
     server.start()
     proxy = server.create_proxy()
     proxy.new_har("microsoft_login", options={'captureHeaders': True, 'captureContent': True, 'trustAllServers': True})
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument(f"--proxy-server={proxy.proxy}")
@@ -144,7 +145,7 @@ def monitor_traffic(driver, proxy):
     WebDriverWait(driver, 5).until(EC.invisibility_of_element_located((By.CSS_SELECTOR, ".Loader")))
     # Save JSON responses from XHR/fetch requests
     dir_name = f"responses_{int(round(time.time()))}"
-    save_dir = os.path.join(SCRIPT_DIR, dir_name)
+    save_dir = os.path.join(base_path, dir_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     json_bool = True
