@@ -55,4 +55,4 @@ py ui.py
 
 ## 📜 License
 
-Distributed under the MIT License. See `LICENSE.txt` for more information.
+Distributed under the GPL-3.0 License. See `LICENSE` for more information.
