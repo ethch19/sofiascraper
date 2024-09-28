@@ -69,7 +69,7 @@ class ChromeWithPrefs(uc.Chrome):
 
 def startup():
     print("Startup triggered")
-    server = Server("browsermob-proxy-2.1.4/bin/browsermob-proxy")
+    server = Server(r"browsermob-proxy-2.1.4\bin\browsermob-proxy")
     server.start()
     proxy = server.create_proxy()
     proxy.new_har("microsoft_login", options={'captureHeaders': True, 'captureContent': True, 'trustAllServers': True})

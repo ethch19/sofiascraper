@@ -24,37 +24,52 @@ def get_files(responses: list, start_with="responses_", separator="_", uuid_sear
             if os.path.isfile(file_path):
                 file_split = os.path.splitext(file)
                 file_sep = file_split[0].split(separator)
+                print(f"{file_split}, {file_sep}")
                 if len(file_sep) > 1:
                     file_name = file_sep[1]
                 else:
                     file_name = file_sep[0]
+                print(file_path)
                 if file_name == uuid_search:
                     with open(file_path, "r") as f:
                         json_dict = json.load(f)
                         uuid = str(json_dict['curriculum'])
                 elif file_name == uuid:
+                    print(f"Filename {file_path} is {uuid}")
                     with open(file_path, "r") as f:
                         json_dict = json.load(f)
-                        if "user_schema" in json_dict:
-                            new_path = os.path.join(folder_path, "schemas.json")
-                            os.rename(file_path, new_path)
-                            folder_dict["schemas"] = new_path
-                        else:
-                            if len(file_sep) > 2:
-                                folder_dict["items-cache"] = file_path
-                                continue
-                            new_path = os.path.join(folder_path, "items.json")
-                            os.rename(file_path, new_path)
-                            folder_dict["items"] = new_path
-                            save_dir = os.path.join(folder_path, "items-cache.json")
-                            print(save_dir)
-                            print(new_path)
-                            if not os.path.isfile(save_dir):
-                                flip_dict_keys(new_path, save_dir)
-                                folder_dict["items-cache"] = save_dir
-                        continue
+                    if "user_schema" in json_dict:
+                        print("user_schema")
+                        new_path = os.path.join(folder_path, "schemas.json")
+                        os.replace(file_path, new_path)
+                        with open(new_path, "w") as q:
+                            json.dump(json_dict, q, indent=4)
+                        folder_dict["schemas"] = new_path
+                    else:
+                        print("items")
+                        if len(file_sep) > 2:
+                            folder_dict["items-cache"] = file_path
+                            continue
+                        new_path = os.path.join(folder_path, "items.json")
+                        os.replace(file_path, new_path)
+                        print(f"items: {new_path}")
+                        with open(new_path, "w") as q:
+                            json.dump(json_dict, q, indent=4)
+                        folder_dict["items"] = new_path
+                        save_dir = os.path.join(folder_path, "items-cache.json")
+                        print(save_dir)
+                        print(new_path)
+                        if not os.path.isfile(save_dir):
+                            print(f"items-cache: {save_dir}")
+                            flip_dict_keys(new_path, save_dir)
+                            folder_dict["items-cache"] = save_dir
+                    continue
                 new_path = os.path.join(folder_path, f"{file_name}.json")
-                os.rename(file_path, new_path)
+                with open(file_path, "r") as q:
+                    old_json = json.load(q)
+                os.replace(file_path, new_path)
+                with open(new_path, "w") as q:
+                    json.dump(old_json, q, indent=4)
                 folder_dict[file_name] = new_path
         folder_dict['uuid-curriculum'] = uuid
         path_dict[folder] = folder_dict
